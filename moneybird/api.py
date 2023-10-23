@@ -8,13 +8,31 @@ from moneybird.authentication import Authentication
 VERSION = '0.1.3'
 
 logger = logging.getLogger('moneybird')
+import ipdb
+import re
 
+
+def extract_filename_from_headers(headers):
+    """
+    Extract the filename from the Content-Disposition header.
+
+    Parameters:
+    - headers (dict): The headers dictionary.
+
+    Returns:
+    - str: The extracted filename or None if not found.
+    """
+    content_disposition = headers.get('Content-Disposition', '')
+    match = re.search(r'filename="([^"]+)"', content_disposition)
+    if match:
+        return match.group(1)
+    return None
 
 class MoneyBird(object):
     """
     Client for the MoneyBird API.
 
-    :param authentication: The authentication method to use.
+    :param authentication: The authentication method to use
     """
     version = 'v2'
     base_url = 'https://moneybird.com/api/'
@@ -22,6 +40,7 @@ class MoneyBird(object):
     def __init__(self, authentication: Authentication):
         self.authentication = authentication
         self.session = None
+
         self.renew_session()
 
     def get(self, resource_path: str, administration_id: int = None):
@@ -36,13 +55,18 @@ class MoneyBird(object):
             >>> moneybird.get('contacts/synchronization', 123)
             [{'id': '143273868766741508', 'version': 1450856630}, ...
 
-        :param resource_path: The resource path.
-        :param administration_id: The administration id (optional, depending on the resource path).
-        :return: The decoded JSON response for the request.
+        :param resource_path: The resource path
+        :param administration_id: The administration id (optional, depending on the resource path)
+        :return: The decoded JSON response for the request
         """
         response = self.session.get(
             url=self._get_url(administration_id, resource_path),
         )
+        if response.headers.get('Content-Type') == 'application/pdf':
+            filename = extract_filename_from_headers(response.headers)
+            with open(filename, 'wb') as file:
+                file.write(response._content)
+            return filename
         return self._process_response(response)
 
     def post(self, resource_path: str, data: dict, administration_id: int = None):
@@ -57,10 +81,10 @@ class MoneyBird(object):
             >>> moneybird.post('webhooks', data, 123)
             {'id': '143274315994891267', 'url': 'http://www.mocky.io/v2/5185415ba171ea3a00704eed', ...
 
-        :param resource_path: The resource path.
-        :param data: The data to send to the server.
-        :param administration_id: The administration id (optional, depending on the resource path).
-        :return: The decoded JSON response for the request.
+        :param resource_path: The resource path
+        :param data: The data to send to the server
+        :param administration_id: The administration id (optional, depending on the resource path)
+        :return: The decoded JSON response for the request
         """
         response = self.session.post(
             url=self._get_url(administration_id, resource_path),
@@ -75,10 +99,10 @@ class MoneyBird(object):
 
         From a client perspective, PATCH requests behave similarly to POST requests.
 
-        :param resource_path: The resource path.
-        :param data: The data to send to the server.
-        :param administration_id: The administration id (optional, depending on the resource path).
-        :return: The decoded JSON response for the request.
+        :param resource_path: The resource path
+        :param data: The data to send to the server
+        :param administration_id: The administration id (optional, depending on the resource path)
+        :return: The decoded JSON response for the request
         """
         response = self.session.patch(
             url=self._get_url(administration_id, resource_path),
@@ -93,9 +117,9 @@ class MoneyBird(object):
 
         From a client perspective, DELETE requests behave similarly to GET requests.
 
-        :param resource_path: The resource path.
-        :param administration_id: The administration id (optional, depending on the resource path).
-        :return: The decoded JSON response for the request.
+        :param resource_path: The resource path
+        :param administration_id: The administration id (optional, depending on the resource path)
+        :return: The decoded JSON response for the request
         """
         response = self.session.delete(
             url=self._get_url(administration_id, resource_path),
@@ -121,9 +145,9 @@ class MoneyBird(object):
         """
         Builds the URL to the API endpoint specified by the given parameters.
 
-        :param administration_id: The ID of the administration (may be None).
-        :param resource_path: The path to the resource.
-        :return: The absolute URL to the endpoint.
+        :param administration_id: The ID of the administration (may be None)
+        :param resource_path: The path to the resource
+        :return: The absolute URL to the endpoint
         """
         url = urljoin(cls.base_url, '%s/' % cls.version)
 
@@ -149,14 +173,13 @@ class MoneyBird(object):
           - MoneyBird.InvalidData: Validation errors occured while processing your input
           - MoneyBird.ServerError: Error on the server
 
-        :param response: The response to process.
-        :param expected: A list of expected status codes which won't raise an exception.
-        :return: The useful data in the response (may be None).
+        :param response: The response to process
+        :param expected: A list of expected status codes which won't raise an exception
+        :return: The useful data in the response (may be None)
         """
         responses = {
             200: None,
             201: None,
-            204: None,
             400: MoneyBird.Unauthorized,
             401: MoneyBird.Unauthorized,
             403: MoneyBird.Throttled,
@@ -197,8 +220,8 @@ class MoneyBird(object):
         """
         def __init__(self, response: requests.Response, description: str = None):
             """
-            :param response: The API response.
-            :param description: Description of the error.
+            :param response: The API response
+            :param description: Description of the error
             """
             self._response = response
 
@@ -217,7 +240,7 @@ class MoneyBird(object):
         @property
         def response(self):
             """
-            JSON encoded data of the response.
+            JSON decoded data of the response.
             """
             return self._response.json()
 
